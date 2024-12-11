@@ -88,8 +88,9 @@ class CNNSentimentKim(minitorch.Module):
         # Concatenate the feature maps
         x = x1 + x2 + x3
         x = x.view(batch, self.feature_map_size)
-        # Apply a Linear to size C and Relu
-        x = self.linear(x).relu()
+        # Apply a Linear to size C
+        # Didn't apply ReLU because of comments on #455
+        x = self.linear(x)
 
         # Apply Dropout with rate 25%
         x = minitorch.dropout(x, self.dropout)
