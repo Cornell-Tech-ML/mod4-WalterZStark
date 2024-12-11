@@ -34,8 +34,7 @@ class Conv1d(minitorch.Module):
         self.bias = RParam(1, out_channels, 1)
 
     def forward(self, input):
-        # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        return minitorch.conv1d(input, self.weights.value) + self.bias.value
 
 
 class CNNSentimentKim(minitorch.Module):
@@ -61,15 +60,43 @@ class CNNSentimentKim(minitorch.Module):
     ):
         super().__init__()
         self.feature_map_size = feature_map_size
-        # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        self.embedding_size = embedding_size
+        self.filter_sizes = filter_sizes
+        self.dropout = dropout
+
+        self.conv1 = Conv1d(embedding_size, feature_map_size, filter_sizes[0])
+        self.conv2 = Conv1d(embedding_size, feature_map_size, filter_sizes[1])
+        self.conv3 = Conv1d(embedding_size, feature_map_size, filter_sizes[2])
+
+        self.linear = Linear(feature_map_size, 1)
 
     def forward(self, embeddings):
         """
         embeddings tensor: [batch x sentence length x embedding dim]
         """
-        # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        batch, sentence_length, embedding_dim = embeddings.shape
+        x = embeddings.permute(0, 2, 1)
+        x1 = self.conv1(x).relu()
+        x2 = self.conv2(x).relu()
+        x3 = self.conv3(x).relu()
+
+        # Apply max-over time across each feature map
+        x1 = minitorch.max(x1, 2)
+        x2 = minitorch.max(x2, 2)
+        x3 = minitorch.max(x3, 2)
+
+        # Concatenate the feature maps
+        x = x1 + x2 + x3
+        x = x.view(batch, self.feature_map_size)
+        # Apply a Linear to size C
+        # Didn't apply ReLU because of comments on #455
+        x = self.linear(x)
+
+        # Apply Dropout with rate 25%
+        x = minitorch.dropout(x, self.dropout)
+
+        # Return the sigmoid over the class dimension
+        return x.sigmoid().view(batch)
 
 
 # Evaluation helper methods

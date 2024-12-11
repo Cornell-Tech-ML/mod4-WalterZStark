@@ -1,14 +1,11 @@
 from typing import Tuple, TypeVar, Any
 
-import numpy as np
 from numba import prange
 from numba import njit as _njit
 
 from .autodiff import Context
 from .tensor import Tensor
 from .tensor_data import (
-    MAX_DIMS,
-    Index,
     Shape,
     Strides,
     Storage,
@@ -22,6 +19,7 @@ Fn = TypeVar("Fn")
 
 
 def njit(fn: Fn, **kwargs: Any) -> Fn:
+    """JIT compile functions using NUMBA."""
     return _njit(inline="always", **kwargs)(fn)  # type: ignore
 
 
@@ -89,9 +87,34 @@ def _tensor_conv1d(
     )
     s1 = input_strides
     s2 = weight_strides
-
-    # TODO: Implement for Task 4.1.
-    raise NotImplementedError("Need to implement for Task 4.1")
+    # Loop over all of the channels.
+    for curr_batch in prange(batch):
+        # Loop over all the output channels.
+        for oc in range(out_channels):
+            # Loop over the output width.
+            for ow in range(out_width):
+                cum_sum = 0.0
+                # Loop over the input channels
+                for ic in range(in_channels):
+                    # Loop over the kernel size.
+                    for k in range(kw):
+                        # Check if the current is reversed
+                        if reverse:
+                            dir_w = ow - k
+                        else:
+                            dir_w = ow + k
+                        # Need to check if the current index fits within the width.
+                        if 0 <= dir_w < width:
+                            # Find weight and input indicies and add to cum_sum for the current ouput position
+                            in_idx = curr_batch * s1[0] + ic * s1[1] + dir_w * s1[2]
+                            w_pos = oc * s2[0] + ic * s2[1] + k * s2[2]
+                            cum_sum += input[in_idx] * weight[w_pos]
+                out_idx = (
+                    curr_batch * out_strides[0]
+                    + oc * out_strides[1]
+                    + ow * out_strides[2]
+                )
+                out[out_idx] = cum_sum
 
 
 tensor_conv1d = njit(_tensor_conv1d, parallel=True)
@@ -100,7 +123,7 @@ tensor_conv1d = njit(_tensor_conv1d, parallel=True)
 class Conv1dFun(Function):
     @staticmethod
     def forward(ctx: Context, input: Tensor, weight: Tensor) -> Tensor:
-        """Compute a 1D Convolution
+        """Forward method to compute a 1D Convolution
 
         Args:
         ----
@@ -127,6 +150,7 @@ class Conv1dFun(Function):
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, Tensor]:
+        """Backward method for a 1D Convolution."""
         input, weight = ctx.saved_values
         batch, in_channels, w = input.shape
         out_channels, in_channels, kw = weight.shape
@@ -218,9 +242,48 @@ def _tensor_conv2d(
     # inners
     s10, s11, s12, s13 = s1[0], s1[1], s1[2], s1[3]
     s20, s21, s22, s23 = s2[0], s2[1], s2[2], s2[3]
-
-    # TODO: Implement for Task 4.2.
-    raise NotImplementedError("Need to implement for Task 4.2")
+    # Loop over all of the channels.
+    for curr_batch in prange(batch):
+        # Loop over all the output channels.
+        for oc in range(out_channels):
+            # Loop over the output height.
+            for oh in range(out_shape[2]):
+                # Loop over the output width.
+                for ow in range(out_shape[3]):
+                    cum_sum = 0.0
+                    # Loop over the input channels
+                    for ic in range(in_channels):
+                        # Loop over the kernel height.
+                        for kh_i in range(kh):
+                            # Loop over the kernel width.
+                            for kw_i in range(kw):
+                                # Check if the current is reversed
+                                if reverse:
+                                    dir_w = ow - kw_i
+                                    dir_h = oh - kh_i
+                                else:
+                                    dir_w = ow + kw_i
+                                    dir_h = oh + kh_i
+                                # Need to check if the current index fits within the width and height.
+                                if 0 <= dir_w < width and 0 <= dir_h < height:
+                                    # Find weight and input indicies and add to cum_sum for the current ouput position
+                                    in_idx = (
+                                        curr_batch * s10
+                                        + ic * s11
+                                        + dir_h * s12
+                                        + dir_w * s13
+                                    )
+                                    w_pos = (
+                                        oc * s20 + ic * s21 + kh_i * s22 + kw_i * s23
+                                    )
+                                    cum_sum += input[in_idx] * weight[w_pos]
+                    out_idx = (
+                        curr_batch * out_strides[0]
+                        + oc * out_strides[1]
+                        + oh * out_strides[2]
+                        + ow * out_strides[3]
+                    )
+                    out[out_idx] = cum_sum
 
 
 tensor_conv2d = njit(_tensor_conv2d, parallel=True, fastmath=True)
@@ -254,6 +317,7 @@ class Conv2dFun(Function):
 
     @staticmethod
     def backward(ctx: Context, grad_output: Tensor) -> Tuple[Tensor, Tensor]:
+        """Backward method for a 2D Convolution."""
         input, weight = ctx.saved_values
         batch, in_channels, h, w = input.shape
         out_channels, in_channels, kh, kw = weight.shape

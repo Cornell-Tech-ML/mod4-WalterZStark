@@ -31,8 +31,53 @@ def test_avg(t: Tensor) -> None:
 @pytest.mark.task4_4
 @given(tensors(shape=(2, 3, 4)))
 def test_max(t: Tensor) -> None:
-    # TODO: Implement for Task 4.4.
-    raise NotImplementedError("Need to implement for Task 4.4")
+    # Test along every dimension
+    output = minitorch.max(t, 2)
+    assert output.shape == (2, 3, 1)
+    for b in range(t.shape[0]):
+        for c in range(t.shape[1]):
+            predicted = max([t[b, c, i] for i in range(t.shape[2])])
+            assert_close(output[b, c, 0], predicted)
+
+    output = minitorch.max(t, 1)
+    assert output.shape == (2, 1, 4)
+    for b in range(t.shape[0]):
+        for w in range(t.shape[2]):
+            predicted = max([t[b, i, w] for i in range(t.shape[1])])
+            assert_close(output[b, 0, w], predicted)
+
+    output = minitorch.max(t, 0)
+    assert output.shape == (1, 3, 4)
+    for c in range(t.shape[1]):
+        for w in range(t.shape[2]):
+            predicted = max([t[i, c, w] for i in range(t.shape[0])])
+            assert_close(output[0, c, w], predicted)
+
+    t = minitorch.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])
+    t.requires_grad_(True)
+    out = minitorch.max(t, 1)
+    out.backward(minitorch.tensor([[[1.0, 1.0]], [[1.0, 1.0]]]))
+    expected_grad = minitorch.tensor(
+        [[[0.0, 0.0], [1.0, 1.0]], [[0.0, 0.0], [1.0, 1.0]]]
+    )
+    assert t.grad is not None
+    for i in range(2):
+        for j in range(2):
+            for k in range(2):
+                assert_close(t.grad[i, j, k], expected_grad[i, j, k])
+
+    t = minitorch.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])
+    t.requires_grad_(True)
+    out = minitorch.max(t, 0)
+    out.backward(minitorch.tensor([[[1.0, 1.0], [1.0, 1.0]]]))
+    expected_grad = minitorch.tensor(
+        [[[0.0, 0.0], [0.0, 0.0]], [[1.0, 1.0], [1.0, 1.0]]]
+    )
+    assert t.grad is not None
+    for i in range(2):
+        for j in range(2):
+            for k in range(2):
+                assert_close(t.grad[i, j, k], expected_grad[i, j, k])
 
 
 @pytest.mark.task4_4

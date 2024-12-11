@@ -4,7 +4,7 @@ from typing import Callable, Dict, Iterable, List, Tuple
 import numba
 import numba.cuda
 import pytest
-from hypothesis import given, settings
+from hypothesis import given, settings, HealthCheck
 from hypothesis.strategies import DataObject, data, integers, lists, permutations
 
 import minitorch
@@ -306,7 +306,7 @@ if numba.cuda.is_available():
 
 
 @given(data())
-@settings(max_examples=25)
+@settings(max_examples=25, suppress_health_check=(HealthCheck.data_too_large,))
 @pytest.mark.parametrize("fn", two_arg)
 @pytest.mark.parametrize("backend", backend_tests)
 def test_two_grad_broadcast(
@@ -344,9 +344,7 @@ def test_mm2() -> None:
     a = minitorch.rand((2, 3), backend=FastTensorBackend)
     b = minitorch.rand((3, 4), backend=FastTensorBackend)
     c = a @ b
-
     c2 = (a.view(2, 3, 1) * b.view(1, 3, 4)).sum(1).view(2, 4)
-
     for ind in c._tensor.indices():
         assert_close(c[ind], c2[ind])
 
@@ -368,9 +366,9 @@ def test_bmm(backend: str, data: DataObject) -> None:
         data.draw(small_ints),
         data.draw(small_ints),
     )
+
     a = data.draw(tensors(backend=shared[backend], shape=(D, A, B)))
     b = data.draw(tensors(backend=shared[backend], shape=(1, B, C)))
-
     c = a @ b
     c2 = (
         (a.contiguous().view(D, A, B, 1) * b.contiguous().view(1, 1, B, C))
